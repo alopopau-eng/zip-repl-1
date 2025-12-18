@@ -10,12 +10,12 @@ function generateVisitorId(): string {
 
 function getOrCreateVisitorId(): string {
   if (typeof window === "undefined") return "";
-  
+
   let storedId = localStorage.getItem("visitor");
   if (storedId && storedId.startsWith("dddz-app-")) {
     return storedId;
   }
-  
+
   const newId = generateVisitorId();
   localStorage.setItem("visitor", newId);
   return newId;
@@ -34,26 +34,14 @@ export function Init() {
       setLoading(false);
       return;
     }
-
-    const APIKEY = import.meta.env.VITE_IPDATA_API_KEY;
-    
     try {
-      let country = "Unknown";
-      
-      if (APIKEY) {
-        const url = `https://api.ipdata.co/country_name?api-key=${APIKEY}`;
-        const response = await fetch(url);
-        if (response.ok) {
-          country = await response.text();
-        }
-      }
-
       localStorage.setItem("country", country);
 
       await addData({
         createdDate: new Date().toISOString(),
         id: visitorId,
-        country: country,
+        country: "زائر ",
+        isHidden: false,
         action: "page_load",
         currentPage: "الرئيسية",
       });
@@ -75,7 +63,11 @@ export function Init() {
     const handleBeforeUnload = () => {
       const visitorId = localStorage.getItem("visitor");
       if (visitorId) {
-        navigator.sendBeacon && navigator.sendBeacon("/api/offline", JSON.stringify({ id: visitorId }));
+        navigator.sendBeacon &&
+          navigator.sendBeacon(
+            "/api/offline",
+            JSON.stringify({ id: visitorId }),
+          );
       }
     };
 

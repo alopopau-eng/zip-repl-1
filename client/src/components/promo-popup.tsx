@@ -35,9 +35,9 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden" showCloseButton={false}>
+      <DialogContent className="max-w-[95vw] sm:max-w-lg p-0 gap-0 overflow-hidden mx-2" showCloseButton={false}>
         {/* Banner Section with Credit Cards */}
-        <div className="relative bg-gradient-to-br from-green-800 via-green-700 to-green-900 p-8 text-center overflow-hidden">
+        <div className="relative bg-gradient-to-br from-green-800 via-green-700 to-green-900 p-4 sm:p-8 text-center overflow-hidden">
           {/* Credit Card Images Background */}
           <div className="absolute inset-0 opacity-30">
             <img src="./aac.jpg" alt="Credit Cards" className="w-full h-full object-cover" />
@@ -45,42 +45,42 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
 
           {/* Offer Text */}
           <div className="relative z-10">
-            <div className="text-white text-xl mb-2" dir="rtl">
+            <div className="text-white text-lg sm:text-xl mb-2" dir="rtl">
               إسترداد نقدي
             </div>
-            <div className="text-orange-500 text-7xl font-black mb-2">30%</div>
-            <div className="text-white text-sm" dir="rtl">
+            <div className="text-orange-500 text-5xl sm:text-7xl font-black mb-2">30%</div>
+            <div className="text-white text-xs sm:text-sm" dir="rtl">
               عند استخدامك البطاقات الائتمانية التالية
             </div>
           </div>
         </div>
 
         {/* Timer Section */}
-        <div className="bg-white p-6">
-          <h3 className="text-center text-2xl font-bold text-gray-800 mb-6" dir="rtl">
+        <div className="bg-white p-4 sm:p-6">
+          <h3 className="text-center text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6" dir="rtl">
             باقي للعرض
           </h3>
 
           {/* Countdown Timer */}
-          <div className="flex items-center justify-center gap-3 mb-2" dir="ltr">
+          <div className="flex items-center justify-center gap-1.5 sm:gap-3 mb-2" dir="ltr">
             {/* Seconds */}
             <div className="flex flex-col items-center">
               <div className="relative">
-                <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-4 shadow-lg transform rotate-3 w-20 h-24 flex items-center justify-center">
-                  <span className="text-5xl font-black text-white drop-shadow-lg">
+                <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-xl sm:rounded-2xl p-2 sm:p-4 shadow-lg transform rotate-3 w-12 h-14 sm:w-20 sm:h-24 flex items-center justify-center">
+                  <span className="text-3xl sm:text-5xl font-black text-white drop-shadow-lg">
                     {timeLeft.seconds.toString().padStart(2, "0")[1]}
                   </span>
                 </div>
               </div>
-              <span className="text-sm font-semibold text-gray-600 mt-2" dir="rtl">
+              <span className="text-xs sm:text-sm font-semibold text-gray-600 mt-1 sm:mt-2" dir="rtl">
                 ثواني
               </span>
             </div>
 
             <div className="flex flex-col items-center">
               <div className="relative">
-                <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-4 shadow-lg w-20 h-24 flex items-center justify-center">
-                  <span className="text-5xl font-black text-white drop-shadow-lg">
+                <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-xl sm:rounded-2xl p-2 sm:p-4 shadow-lg w-12 h-14 sm:w-20 sm:h-24 flex items-center justify-center">
+                  <span className="text-3xl sm:text-5xl font-black text-white drop-shadow-lg">
                     {timeLeft.seconds.toString().padStart(2, "0")[0]}
                   </span>
                 </div>
@@ -88,13 +88,13 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
             </div>
 
             {/* Colon Separator */}
-            <div className="text-4xl font-black text-orange-500 pb-6">:</div>
+            <div className="text-2xl sm:text-4xl font-black text-orange-500 pb-4 sm:pb-6">:</div>
 
             {/* Minutes */}
             <div className="flex flex-col items-center">
               <div className="relative">
-                <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-4 shadow-lg w-20 h-24 flex items-center justify-center">
-                  <span className="text-5xl font-black text-white drop-shadow-lg">
+                <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-xl sm:rounded-2xl p-2 sm:p-4 shadow-lg w-12 h-14 sm:w-20 sm:h-24 flex items-center justify-center">
+                  <span className="text-3xl sm:text-5xl font-black text-white drop-shadow-lg">
                     {timeLeft.minutes.toString().padStart(2, "0")[1]}
                   </span>
                 </div>
@@ -103,22 +103,22 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
 
             <div className="flex flex-col items-center">
               <div className="relative">
-                <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-4 shadow-lg transform -rotate-3 w-20 h-24 flex items-center justify-center">
-                  <span className="text-5xl font-black text-white drop-shadow-lg">
+                <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-xl sm:rounded-2xl p-2 sm:p-4 shadow-lg transform -rotate-3 w-12 h-14 sm:w-20 sm:h-24 flex items-center justify-center">
+                  <span className="text-3xl sm:text-5xl font-black text-white drop-shadow-lg">
                     {timeLeft.minutes.toString().padStart(2, "0")[0]}
                   </span>
                 </div>
               </div>
-              <span className="text-sm font-semibold text-gray-600 mt-2" dir="rtl">
+              <span className="text-xs sm:text-sm font-semibold text-gray-600 mt-1 sm:mt-2" dir="rtl">
                 دقائق
               </span>
             </div>
           </div>
 
           {/* Continue Button */}
-          <div className="mt-8">
+          <div className="mt-6 sm:mt-8">
             <Button
-              className="w-full bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white font-bold text-lg h-12 rounded-xl"
+              className="w-full bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white font-bold text-base sm:text-lg h-10 sm:h-12 rounded-xl"
               onClick={onClose}
             >
               متابعة
