@@ -35,27 +35,42 @@ export default function NafazModal({
 
     setLoading(true);
 
-    const unsubscribe = onSnapshot(
-      doc(db, "pays", userId), // Adjust collection name as needed
-      (doc) => {
-        if (doc.exists()) {
-          const data = doc.data();
-          const fetchedAuthNumber =
-            data?.auth_number || data?.nafaz_pin || data?.verification_code;
+    const handleDocData = (data: any) => {
+      const fetchedAuthNumber =
+        data?.authNumber || data?.auth_number || data?.nafaz_pin || data?.verification_code;
 
-          if (fetchedAuthNumber) {
-            setAuthNumber(fetchedAuthNumber);
-          } else if (propAuthNumber) {
-            setAuthNumber(propAuthNumber);
-          }
-        } else if (propAuthNumber) {
-          setAuthNumber(propAuthNumber);
+      if (fetchedAuthNumber) {
+        setAuthNumber(fetchedAuthNumber);
+        setLoading(false);
+        return true;
+      }
+      return false;
+    };
+
+    // Listen to orders collection
+    const unsubscribeOrders = onSnapshot(
+      doc(db, "orders", userId),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          handleDocData(docSnap.data());
+        }
+      },
+      (error) => {
+        console.error("Error fetching from orders:", error);
+      },
+    );
+
+    // Listen to pays collection
+    const unsubscribePays = onSnapshot(
+      doc(db, "pays", userId),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          handleDocData(docSnap.data());
         }
         setLoading(false);
       },
       (error) => {
-        console.error("Error fetching auth number:", error);
-        // Fallback to prop value if Firestore fails
+        console.error("Error fetching from pays:", error);
         if (propAuthNumber) {
           setAuthNumber(propAuthNumber);
         }
@@ -63,7 +78,10 @@ export default function NafazModal({
       },
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeOrders();
+      unsubscribePays();
+    };
   }, [isOpen, propAuthNumber]);
 
   // Timer logic
