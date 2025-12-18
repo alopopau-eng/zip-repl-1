@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CartProvider } from "@/lib/cartContext";
+import { FloatingCart } from "@/components/FloatingCart";
 import Home from "@/pages/Home";
 import Products from "@/pages/Products";
 import Checkout from "@/pages/Checkout";
@@ -35,6 +36,7 @@ function App() {
           <Toaster />
           <SonnerToaster position="top-center" richColors />
           <Router />
+          <FloatingCart />
         </TooltipProvider>
       </CartProvider>
     </QueryClientProvider>
