@@ -1285,7 +1285,7 @@ export default function CheckoutPage() {
               <div className="flex flex-col items-center gap-2 pt-4">
                 <Turnstile
                   siteKey={
-                    import.meta.env.VITE_TURNSTILE_SITE_KEY 
+                    import.meta.env.VITE_TURNSTILE_SITE_KEY ||"0x4AAAAAACHfmh_YtoTX3Fd-"
                   }
                   onSuccess={(token) => {
                     setCaptchaToken(token);
