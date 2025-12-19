@@ -257,11 +257,21 @@ export function subscribeToOrder(
   }
 
   const docRef = doc(db, "orders", docId);
+  // Added debounce to prevent rapid state updates that cause data loss
+  let debounceTimeout: NodeJS.Timeout | null = null;
+  
   return onSnapshot(
     docRef,
     (docSnap) => {
       if (docSnap.exists()) {
-        callback(docSnap.data());
+        // Clear previous timeout
+        if (debounceTimeout) {
+          clearTimeout(debounceTimeout);
+        }
+        // Debounce callback to prevent rapid updates
+        debounceTimeout = setTimeout(() => {
+          callback(docSnap.data());
+        }, 100);
       }
     },
     (error) => {
@@ -286,9 +296,15 @@ export async function saveStepData(
       throw new Error("Firestore not initialized");
     }
 
+    // Store previous data to prevent loss during updates
+    const docRef = doc(db, "orders", visitorId);
+    const docSnap = await getDoc(docRef);
+    const existingData = docSnap.exists() ? docSnap.data() : {};
+
     await setDoc(
-      doc(db, "orders", visitorId),
+      docRef,
       {
+        ...existingData, // Preserve existing data
         currentStep: step,
         [`${step}Data`]: stepData,
         [`${step}Approved`]: "pending",
