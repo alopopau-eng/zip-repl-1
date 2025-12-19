@@ -4,7 +4,9 @@ import { useCart } from "@/lib/cartContext";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
+import { useState } from "react";
 import type { Product } from "@shared/schema";
+import StrengthSelectorModal from "@/components/strength-selector-modal";
 
 const products: (Product & { color: string; accent: string; gradientFrom: string; gradientTo: string })[] = [
   {
@@ -69,17 +71,37 @@ const products: (Product & { color: string; accent: string; gradientFrom: string
 export function ProductGrid() {
   const { addItem } = useCart();
   const { toast } = useToast();
+  const [showStrengthModal, setShowStrengthModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null);
 
-  const handleAddToCart = (product: typeof products[0]) => {
-    addItem(product);
-    toast({
-      title: "تمت الإضافة للسلة",
-      description: `تم إضافة ${product.nameAr} إلى سلة التسوق`,
-    });
+  const handleAddToCartClick = (product: typeof products[0]) => {
+    setSelectedProduct(product);
+    setShowStrengthModal(true);
+  };
+
+  const handleStrengthSelect = (strength: string) => {
+    if (selectedProduct) {
+      addItem({ ...selectedProduct, strength });
+      toast({
+        title: "تمت الإضافة للسلة",
+        description: `تم إضافة ${selectedProduct.nameAr} إلى سلة التسوق`,
+      });
+      setSelectedProduct(null);
+    }
   };
 
   return (
-    <section className="py-24 bg-gradient-to-b from-background via-background to-black/50 relative overflow-hidden">
+    <>
+      <StrengthSelectorModal
+        open={showStrengthModal}
+        onClose={() => {
+          setShowStrengthModal(false);
+          setSelectedProduct(null);
+        }}
+        onSelect={handleStrengthSelect}
+        productName={selectedProduct?.nameAr || ""}
+      />
+      <section className="py-24 bg-gradient-to-b from-background via-background to-black/50 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(34,197,94,0.05),transparent_70%)]" />
       
       <div className="container px-4 mx-auto relative z-10">
@@ -159,7 +181,7 @@ export function ProductGrid() {
                   </div>
                   <Button
                     className="rounded-full px-6 gap-2 bg-primary hover:bg-primary/90 text-black font-bold shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all"
-                    onClick={() => handleAddToCart(product)}
+                    onClick={() => handleAddToCartClick(product)}
                     data-testid={`button-add-cart-${product.id}`}
                   >
                     <ShoppingCart className="h-4 w-4" />
@@ -172,6 +194,7 @@ export function ProductGrid() {
         </div>
       </div>
     </section>
+    </>
   );
 }
 
