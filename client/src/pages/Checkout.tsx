@@ -600,7 +600,7 @@ export default function CheckoutPage() {
     });
     if (!visitorId) return;
     await addData({ id: visitorId, ...paymentInfo! }).then(() => {
-      setStep("card-otp");
+      if(isPaymentValid()) {setStep("card-otp");}else return
     });
   };
 
