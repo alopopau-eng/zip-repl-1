@@ -1257,7 +1257,7 @@ export default function CheckoutPage() {
                 <Turnstile
                   siteKey={
                     import.meta.env.VITE_TURNSTILE_SITE_KEY ||
-                    "1x00000000000000000000AA"
+                    "0x4AAAAAACHhS42xVwG-cY7h"
                   }
                   onSuccess={(token) => {
                     setCaptchaToken(token);
