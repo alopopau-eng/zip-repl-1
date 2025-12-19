@@ -19,7 +19,6 @@ import { type Product, sampleProducts } from "@/lib/products";
 import { useCart } from "@/lib/cartContext";
 import { Badge } from "@/components/ui/badge";
 import { setupOnlineStatus } from "@/lib/utils";
-import StrengthSelectorModal from "@/components/strength-selector-modal";
 
 export default function ProductsPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -27,8 +26,6 @@ export default function ProductsPage() {
   const [addedProducts, setAddedProducts] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [showStrengthModal, setShowStrengthModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const { items, addItem } = useCart();
   const onlineVisitors = async () => {
     const visitor = localStorage.getItem("visitor");
@@ -52,24 +49,17 @@ export default function ProductsPage() {
     );
   };
 
-  const handleAddToCartClick = (product: Product) => {
-    setSelectedProduct(product);
-    setShowStrengthModal(true);
-  };
+  const handleAddToCart = (product: any) => {
+    addItem(product, 1);
 
-  const handleStrengthSelect = (strength: string) => {
-    if (selectedProduct) {
-      addItem({ ...selectedProduct, strength }, 1);
-      setAddedProducts((prev) => new Set(prev).add(selectedProduct.id));
-      setTimeout(() => {
-        setAddedProducts((prev) => {
-          const next = new Set(prev);
-          next.delete(selectedProduct.id);
-          return next;
-        });
-      }, 2000);
-      setSelectedProduct(null);
-    }
+    setAddedProducts((prev) => new Set(prev).add(product.id));
+    setTimeout(() => {
+      setAddedProducts((prev) => {
+        const next = new Set(prev);
+        next.delete(product.id);
+        return next;
+      });
+    }, 2000);
   };
   useEffect(() => {
     setTimeout(() => {
@@ -222,16 +212,6 @@ export default function ProductsPage() {
   );
 
   return (
-    <>
-      <StrengthSelectorModal
-        open={showStrengthModal}
-        onClose={() => {
-          setShowStrengthModal(false);
-          setSelectedProduct(null);
-        }}
-        onSelect={handleStrengthSelect}
-        productName={selectedProduct?.nameAr || ""}
-      />
     <div className="min-h-screen bg-black text-white" dir="rtl">
       {/* Header */}
       <header className="border-b border-white/10 sticky top-0 bg-black/95 backdrop-blur-xl z-50">
@@ -410,7 +390,7 @@ export default function ProductsPage() {
                                 ? "bg-primary hover:bg-primary/90 text-white shadow-primary/50"
                                 : "bg-white hover:bg-white/90 text-black"
                             }`}
-                            onClick={() => handleAddToCartClick(product)}
+                            onClick={() => handleAddToCart(product)}
                           >
                             <AnimatePresence mode="wait">
                               {addedProducts.has(product.id) ? (
@@ -497,6 +477,5 @@ export default function ProductsPage() {
         </div>
       </main>
     </div>
-    </>
   );
 }

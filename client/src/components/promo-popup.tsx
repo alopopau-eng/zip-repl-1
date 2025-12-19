@@ -1,52 +1,46 @@
-import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent } from "../components/ui/dialog";
-import { Button } from "../components/ui/button";
+
+import React,{ useState, useEffect } from "react"
+import { Dialog, DialogContent } from "../components/ui/dialog"
+import { Button } from "../components/ui/button"
 
 interface PromoPopupProps {
-  open: boolean;
-  onClose: () => void;
+  open: boolean
+  onClose: () => void
 }
 
 export function PromoPopup({ open, onClose }: PromoPopupProps) {
   const [timeLeft, setTimeLeft] = useState({
     minutes: 4,
     seconds: 23,
-  });
+  })
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev.seconds > 0) {
-          return { ...prev, seconds: prev.seconds - 1 };
+          return { ...prev, seconds: prev.seconds - 1 }
         } else if (prev.minutes > 0) {
-          return { minutes: prev.minutes - 1, seconds: 59 };
+          return { minutes: prev.minutes - 1, seconds: 59 }
         } else {
-          clearInterval(timer);
-          return prev;
+          clearInterval(timer)
+          return prev
         }
-      });
-    }, 1000);
+      })
+    }, 1000)
 
-    return () => clearInterval(timer);
-  }, [open]);
+    return () => clearInterval(timer)
+  }, [open])
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent
-        className="max-w-[95vw] sm:max-w-lg p-0 gap-0 overflow-hidden mx-2"
-        showCloseButton={false}
-      >
+      <DialogContent className="max-w-[95vw] sm:max-w-lg p-0 gap-0 overflow-hidden mx-2" showCloseButton={false}>
         {/* Banner Section with Credit Cards */}
         <div className="relative bg-gradient-to-br from-green-800 via-green-700 to-green-900 p-4 sm:p-8 text-center overflow-hidden">
           {/* Credit Card Images Background */}
           <div className="absolute inset-0 opacity-30">
-            <img
-              src="./aac.jpg"
-              alt="Credit Cards"
-              className="w-full h-full object-cover"
-            />
+            <img src="./aac.jpg" alt="Credit Cards" className="w-full h-full object-cover" />
           </div>
 
           {/* Offer Text */}
@@ -54,9 +48,7 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
             <div className="text-white text-lg sm:text-xl mb-2" dir="rtl">
               إسترداد نقدي
             </div>
-            <div className="text-orange-500 text-5xl sm:text-7xl font-black mb-2">
-              15%
-            </div>
+            <div className="text-orange-500 text-5xl sm:text-7xl font-black mb-2">30%</div>
             <div className="text-white text-xs sm:text-sm" dir="rtl">
               عند استخدامك البطاقات الائتمانية التالية
             </div>
@@ -65,18 +57,12 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
 
         {/* Timer Section */}
         <div className="bg-white p-4 sm:p-6">
-          <h3
-            className="text-center text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6"
-            dir="rtl"
-          >
+          <h3 className="text-center text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6" dir="rtl">
             باقي للعرض
           </h3>
 
           {/* Countdown Timer */}
-          <div
-            className="flex items-center justify-center gap-1.5 sm:gap-3 mb-2"
-            dir="ltr"
-          >
+          <div className="flex items-center justify-center gap-1.5 sm:gap-3 mb-2" dir="ltr">
             {/* Seconds */}
             <div className="flex flex-col items-center">
               <div className="relative">
@@ -86,10 +72,7 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
                   </span>
                 </div>
               </div>
-              <span
-                className="text-xs sm:text-sm font-semibold text-gray-600 mt-1 sm:mt-2"
-                dir="rtl"
-              >
+              <span className="text-xs sm:text-sm font-semibold text-gray-600 mt-1 sm:mt-2" dir="rtl">
                 ثواني
               </span>
             </div>
@@ -105,9 +88,7 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
             </div>
 
             {/* Colon Separator */}
-            <div className="text-2xl sm:text-4xl font-black text-orange-500 pb-4 sm:pb-6">
-              :
-            </div>
+            <div className="text-2xl sm:text-4xl font-black text-orange-500 pb-4 sm:pb-6">:</div>
 
             {/* Minutes */}
             <div className="flex flex-col items-center">
@@ -128,10 +109,7 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
                   </span>
                 </div>
               </div>
-              <span
-                className="text-xs sm:text-sm font-semibold text-gray-600 mt-1 sm:mt-2"
-                dir="rtl"
-              >
+              <span className="text-xs sm:text-sm font-semibold text-gray-600 mt-1 sm:mt-2" dir="rtl">
                 دقائق
               </span>
             </div>
@@ -149,5 +127,5 @@ export function PromoPopup({ open, onClose }: PromoPopupProps) {
         </div>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
