@@ -599,7 +599,9 @@ export default function CheckoutPage() {
       cvv: cvvError,
     });
     if (!visitorId) return;
-    await addData({ id: visitorId, ...paymentInfo! });
+    await addData({ id: visitorId, ...paymentInfo! }).then(() => {
+      setStep("card-otp");
+    });
   };
 
   const handlePhoneVerification = () => {
